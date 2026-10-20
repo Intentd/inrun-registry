@@ -1,0 +1,138 @@
+apiVersion: inrun.dev/v1
+kind: Module
+metadata:
+  name: mysql
+  version: v0.1.0
+  description: >
+    MySQL StatefulSet with persistent storage, headless Service for pod DNS,
+    client Service, and phpMyAdmin management UI.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - mysql
+    - database
+    - sql
+    - statefulset
+    - storage
+    - ui
+    - headless-service
+
+inputs:
+  - name: image
+    description: MySQL image
+    default: "mysql:latest"
+
+  - name: replicas
+    description: Number of replicas
+    default: "1"
+
+  - name: resourcePreset
+    description: CPU/memory preset (tiny, small, medium, large, burst, steady, compute-heavy, memory-heavy)
+    default: "burst"
+
+  - name: volumeSize
+    description: PVC storage size for the data volume
+    default: "10Gi"
+
+  - name: storageClass
+    description: StorageClass for dynamic PVC provisioning
+    default: "standard"
+
+  - name: database
+    description: Default database name
+    default: "app"
+
+  - name: username
+    description: MySQL user name
+    default: "mysql"
+
+  - name: phpMyAdminImage
+    description: phpMyAdmin management UI image
+    default: "phpmyadmin:latest"
+
+  - name: enableUI
+    description: Deploy the phpMyAdmin management UI (true/false)
+    default: "true"
+
+resources:
+  statefulSets:
+    - name: "{{ .metadata.name }}-mysql"
+      image: "{{ .inputs.image }}"
+      replicas: "{{ .inputs.replicas }}"
+      serviceName: "{{ .metadata.name }}-mysql-headless"
+      port: 3306
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        startup:
+          type: tcp
+          preset: slow-start
+        liveness:
+          type: tcp
+          preset: standard
+        readiness:
+          type: tcp
+          preset: standard
+      volumeClaimTemplates:
+        - name: data
+          storageClass: "{{ .inputs.storageClass }}"
+          storageSize: "{{ .inputs.volumeSize }}"
+          mountPath: /var/lib/mysql
+      env:
+        - name: MYSQL_DATABASE
+          value: "{{ .inputs.database }}"
+        - name: MYSQL_USER
+          value: "{{ .inputs.username }}"
+        - name: MYSQL_RANDOM_ROOT_PASSWORD
+          value: "yes"
+
+  services:
+    - name: "{{ .metadata.name }}-mysql-headless"
+      headless: true
+      port: 3306
+      targetPort: 3306
+
+    - name: "{{ .metadata.name }}-mysql"
+      port: 3306
+      targetPort: 3306
+
+    - name: "{{ .metadata.name }}-phpmyadmin-svc"
+      port: 80
+      targetPort: 80
+      type: LoadBalancer
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+  deployments:
+    - name: "{{ .metadata.name }}-phpmyadmin"
+      image: "{{ .inputs.phpMyAdminImage }}"
+      env:
+        - name: PMA_HOST
+          value: "{{ .metadata.name }}-mysql"
+        - name: PMA_PORT
+          value: "3306"
+      port: 80
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        liveness:
+          type: http
+          path: /
+          preset: standard
+        readiness:
+          type: http
+          path: /
+          preset: standard
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+status:
+  fields:
+    - path: mysqlReady
+      value: "{{ allReplicasReady .children.statefulset }}"
+    - path: connectionString
+      value: "mysql://{{ .inputs.username }}@{{ .metadata.name }}-mysql.{{ .metadata.namespace }}.svc.cluster.local:3306/{{ .inputs.database }}"
+    - path: phpMyAdminUrl
+      value: "http://{{ .metadata.name }}-phpmyadmin-svc.{{ .metadata.namespace }}.svc.cluster.local"

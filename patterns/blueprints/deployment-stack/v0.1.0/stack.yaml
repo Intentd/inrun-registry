@@ -1,0 +1,18 @@
+apiVersion: inrun.dev/v1
+kind: Stack
+metadata:
+  name: deployment-stack-example
+  description: Example Stack showing how to consume the deployment-stack pattern
+
+imports:
+  registry:
+    - url: ghcr.io/intentd/registry/patterns/blueprints/deployment-stack:v0.1.0
+      oci: true
+
+spec:
+  crds:
+    application:
+      operatorBox:
+        reconcile:
+          workers: 4
+          resync: 30s

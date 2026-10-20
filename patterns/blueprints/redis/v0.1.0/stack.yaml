@@ -1,0 +1,18 @@
+apiVersion: inrun.dev/v1
+kind: Stack
+metadata:
+  name: redis-example
+  description: Example Stack showing how to consume the redis pattern
+
+imports:
+  registry:
+    - url: ghcr.io/intentd/registry/patterns/blueprints/redis:v0.1.0
+      oci: true
+
+spec:
+  crds:
+    redis:
+      operatorBox:
+        reconcile:
+          workers: 4
+          resync: 30s

@@ -1,0 +1,43 @@
+apiVersion: inrun.dev/v1
+kind: Simulate
+metadata:
+  name: deployment-stack-sim
+  description: Verify the full deployment stack — ServiceAccount, Role, Deployment, Service, HPA, PDB created in cycle 1
+
+spec:
+  blueprint: ../blueprint.yaml
+  cr: ../manifests/cr.yaml
+  cycles: 5
+
+  expect:
+    steady: true
+    noErrors: true
+    ops:
+      - cycle: 1
+        verb: create
+        resource: serviceaccounts
+        name: my-app-sa
+      - cycle: 1
+        verb: apply
+        resource: roles
+        name: my-app-role
+      - cycle: 1
+        verb: apply
+        resource: rolebindings
+        name: my-app-rolebinding
+      - cycle: 1
+        verb: apply
+        resource: deployments
+        name: my-app
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-app-svc
+      - cycle: 1
+        verb: apply
+        resource: horizontalpodautoscalers
+        name: my-app-hpa
+      - cycle: 1
+        verb: apply
+        resource: poddisruptionbudgets
+        name: my-app-pdb

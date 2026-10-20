@@ -1,0 +1,49 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: postgres
+  version: v0.1.0
+  description: >-
+    A declarative PostgreSQL deployment pattern that provisions a single‑instance
+    Postgres server using any CR image version. The pattern accepts any valid
+    Postgres image tag through spec.version, defaults to 14, and exposes port 5432
+    via a stable Service. Suitable for development, CI, and controlled production.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - postgres
+    - database
+    - sql
+    - stateful
+    - persistent-storage
+    - service
+    - single-instance
+    - development
+    - ci
+    - production-ready
+    - storage
+    - blueprint
+
+spec:
+  crds:
+    postgres:
+      apiTypes:
+        group: postgres.inrun.dev
+        version: v1
+        kind: Postgres
+        plural: postgreses
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/postgres:v0.1.0
+              with:
+                image: 'postgres:{{ .spec.version | default "14" }}'
+                replicas: '{{ .spec.replicas | default "1" }}'
+                resourcePreset: '{{ .spec.resourcePreset | default "burst" }}'
+                volumeSize: '{{ .spec.storageSize | default "10Gi" }}'
+                storageClass: '{{ .spec.storageClass | default "standard" }}'
+                database: '{{ .spec.database | default "app" }}'
+                username: '{{ .spec.username | default "postgres" }}'
+                enableUI: '{{ .spec.enableUI | default "true" }}'

@@ -1,0 +1,48 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: deployment-stack
+  version: v0.1.0
+  description: >-
+    A declarative application deployment pattern that provisions a full
+    production-ready stack: ServiceAccount, Role, RoleBinding, Deployment,
+    Service, HPA, PDB, and optional Ingress. Accepts any container image and
+    port. Suitable for stateless web services, APIs, and background workers.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - deployment
+    - service
+    - autoscaling
+    - ingress
+    - rbac
+    - full-stack
+    - application
+    - stateless
+    - production-ready
+    - blueprint
+
+spec:
+  crds:
+    application:
+      apiTypes:
+        group: apps.inrun.dev
+        version: v1
+        kind: Application
+        plural: applications
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/deployment-stack:v0.1.0
+              with:
+                name: '{{ .metadata.name }}'
+                namespace: '{{ .metadata.namespace }}'
+                image: '{{ .spec.image }}'
+                port: '{{ .spec.port }}'
+                replicas: '{{ .spec.replicas }}'
+                maxReplicas: '{{ .spec.maxReplicas }}'
+                resourcePreset: '{{ .spec.resourcePreset }}'
+                className: '{{ .spec.className }}'
+                host: '{{ .spec.host }}'

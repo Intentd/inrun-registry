@@ -1,0 +1,108 @@
+apiVersion: inrun.dev/v1
+kind: Module
+metadata:
+  name: rabbitmq
+  version: v0.1.0
+  description: >
+    RabbitMQ StatefulSet with persistent storage, headless Service for cluster node DNS,
+    AMQP Service, and built-in management UI (port 15672) via the management plugin.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - rabbitmq
+    - messaging
+    - amqp
+    - statefulset
+    - storage
+    - cluster
+    - ui
+
+inputs:
+  - name: image
+    description: RabbitMQ image (management tag includes the web UI)
+    default: "rabbitmq:management"
+
+  - name: replicas
+    description: Number of replicas
+    default: "1"
+
+  - name: resourcePreset
+    description: CPU/memory preset (tiny, small, medium, large, burst, steady, compute-heavy, memory-heavy)
+    default: "small"
+
+  - name: volumeSize
+    description: PVC storage size for the data directory
+    default: "5Gi"
+
+  - name: storageClass
+    description: StorageClass for dynamic PVC provisioning
+    default: "standard"
+
+  - name: username
+    description: RabbitMQ default admin username
+    default: "admin"
+
+  - name: vhost
+    description: Default virtual host
+    default: "/"
+
+  - name: enableUI
+    description: Expose the RabbitMQ management UI service on port 15672 (true/false)
+    default: "true"
+
+resources:
+  statefulSets:
+    - name: "{{ .metadata.name }}-rabbitmq"
+      image: "{{ .inputs.image }}"
+      replicas: "{{ .inputs.replicas }}"
+      serviceName: "{{ .metadata.name }}-rabbitmq-headless"
+      port: 5672
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        startup:
+          type: tcp
+          preset: patient
+        liveness:
+          type: tcp
+          preset: standard
+        readiness:
+          type: tcp
+          preset: standard
+      volumeClaimTemplates:
+        - name: data
+          storageClass: "{{ .inputs.storageClass }}"
+          storageSize: "{{ .inputs.volumeSize }}"
+          mountPath: /var/lib/rabbitmq
+      env:
+        - name: RABBITMQ_DEFAULT_USER
+          value: "{{ .inputs.username }}"
+        - name: RABBITMQ_DEFAULT_VHOST
+          value: "{{ .inputs.vhost }}"
+
+  services:
+    - name: "{{ .metadata.name }}-rabbitmq-headless"
+      headless: true
+      port: 5672
+      targetPort: 5672
+
+    - name: "{{ .metadata.name }}-rabbitmq"
+      port: 5672
+      targetPort: 5672
+
+    - name: "{{ .metadata.name }}-rabbitmq-management"
+      port: 15672
+      targetPort: 15672
+      type: LoadBalancer
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+status:
+  fields:
+    - path: rabbitmqReady
+      value: "{{ allReplicasReady .children.statefulset }}"
+    - path: amqpUrl
+      value: "amqp://{{ .inputs.username }}@{{ .metadata.name }}-rabbitmq.{{ .metadata.namespace }}.svc.cluster.local:5672{{ .inputs.vhost }}"
+    - path: managementUrl
+      value: "http://{{ .metadata.name }}-rabbitmq-management.{{ .metadata.namespace }}.svc.cluster.local:15672"

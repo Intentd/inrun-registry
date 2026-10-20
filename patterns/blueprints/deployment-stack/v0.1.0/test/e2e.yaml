@@ -1,0 +1,90 @@
+apiVersion: inrun.dev/v1
+kind: E2E
+metadata:
+  name: deployment-stack-e2e
+  description: End-to-end test for the deployment-stack Blueprint
+spec:
+  cluster:
+    name: inrun-e2e-deployment-stack
+    provider: kind
+    reuse: false
+  blueprint: ../blueprint.yaml
+  crd: ../manifests/crd.yaml
+  cr: ../manifests/cr.yaml
+  expect:
+    - name: "CR created"
+      after: cr-applied
+      timeout: 30s
+      resources:
+        - kind: Application
+          name: my-app
+          namespace: default
+
+    - name: "Deployment running with correct image and replicas"
+      after: cr-applied
+      timeout: 120s
+      resources:
+        - kind: Deployment
+          name: my-app
+          namespace: default
+          ready: true
+      kubectl:
+        get:
+          - kind: Deployment
+            name: my-app
+            namespace: default
+            field: .spec.replicas
+            equals: "2"
+          - kind: Deployment
+            name: my-app
+            namespace: default
+            field: .spec.template.spec.containers[0].image
+            equals: nginx:latest
+
+    - name: "Service exists with correct port"
+      after: cr-applied
+      timeout: 60s
+      resources:
+        - kind: Service
+          name: my-app-svc
+          namespace: default
+      kubectl:
+        get:
+          - kind: Service
+            name: my-app-svc
+            namespace: default
+            field: .spec.ports[0].port
+            equals: "80"
+
+    - name: "HPA exists with correct maxReplicas"
+      after: cr-applied
+      timeout: 60s
+      resources:
+        - kind: HorizontalPodAutoscaler
+          name: my-app-hpa
+          namespace: default
+      kubectl:
+        get:
+          - kind: HorizontalPodAutoscaler
+            name: my-app-hpa
+            namespace: default
+            field: .spec.maxReplicas
+            equals: "5"
+
+    - name: "CR deleted"
+      after: cr-deleted
+      timeout: 60s
+      resources:
+        - kind: Application
+          name: my-app
+          namespace: default
+          count: 0
+
+    - name: "Deployment removed"
+      after: cr-deleted
+      timeout: 90s
+      resources:
+        - kind: Deployment
+          name: my-app
+          namespace: default
+          count: 0

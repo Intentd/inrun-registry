@@ -1,0 +1,164 @@
+apiVersion: inrun.dev/v1
+kind: Module
+metadata:
+  name: mongodb
+  version: v0.1.0
+  description: >
+    MongoDB StatefulSet with persistent storage, headless Service for pod DNS,
+    client Service, and mongo-express management UI.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - mongodb
+    - database
+    - nosql
+    - statefulset
+    - storage
+    - ui
+    - headless-service
+
+inputs:
+  - name: image
+    description: MongoDB image
+    default: "mongo:latest"
+
+  - name: replicas
+    description: Number of replicas
+    default: "1"
+
+  - name: resourcePreset
+    description: CPU/memory preset (tiny, small, medium, large, burst, steady, compute-heavy, memory-heavy)
+    default: "burst"
+
+  - name: volumeSize
+    description: PVC storage size for the data volume
+    default: "10Gi"
+
+  - name: storageClass
+    description: StorageClass for dynamic PVC provisioning
+    default: "standard"
+
+  - name: database
+    description: Default database name
+    default: "app"
+
+  - name: username
+    description: MongoDB root username
+    default: "admin"
+
+  - name: mongoExpressImage
+    description: mongo-express management UI image
+    default: "mongo-express:latest"
+
+  - name: enableUI
+    description: Deploy the mongo-express management UI (true/false)
+    default: "true"
+
+  - name: passwordRotation
+    description: How often to rotate the generated password secret (e.g. 30d, 90d, 365d). Set to "never" to disable rotation.
+    default: "30d"
+
+resources:
+  onCreate:
+    secrets:
+      - name: "{{ .metadata.name }}-creds"
+        once: true
+        rotateAfter: "{{ .inputs.passwordRotation }}"
+        data:
+          password: "{{ randomAlphanumeric 16 }}"
+
+  statefulSets:
+    - name: "{{ .metadata.name }}-mongodb"
+      image: "{{ .inputs.image }}"
+      replicas: "{{ .inputs.replicas }}"
+      serviceName: "{{ .metadata.name }}-mongodb-headless"
+      port: 27017
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        startup:
+          type: tcp
+          preset: slow-start
+        liveness:
+          type: tcp
+          preset: standard
+        readiness:
+          type: tcp
+          preset: standard
+      volumeClaimTemplates:
+        - name: data
+          storageClass: "{{ .inputs.storageClass }}"
+          storageSize: "{{ .inputs.volumeSize }}"
+          mountPath: /data/db
+      env:
+        - name: MONGO_INITDB_DATABASE
+          value: "{{ .inputs.database }}"
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: "{{ .inputs.username }}"
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ .metadata.name }}-creds"
+              key: password
+
+  services:
+    - name: "{{ .metadata.name }}-mongodb-headless"
+      headless: true
+      port: 27017
+      targetPort: 27017
+
+    - name: "{{ .metadata.name }}-mongodb"
+      port: 27017
+      targetPort: 27017
+
+    - name: "{{ .metadata.name }}-mongoexpress-svc"
+      port: 8081
+      targetPort: 8081
+      type: LoadBalancer
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+  deployments:
+    - name: "{{ .metadata.name }}-mongoexpress"
+      image: "{{ .inputs.mongoExpressImage }}"
+      env:
+        - name: ME_CONFIG_MONGODB_SERVER
+          value: "{{ .metadata.name }}-mongodb"
+        - name: ME_CONFIG_MONGODB_PORT
+          value: "27017"
+        - name: ME_CONFIG_BASICAUTH
+          value: "false"
+        - name: ME_CONFIG_MONGODB_AUTH_USERNAME
+          value: "{{ .inputs.username }}"
+        - name: ME_CONFIG_MONGODB_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ .metadata.name }}-creds"
+              key: password
+      port: 8081
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        liveness:
+          type: http
+          path: /
+          preset: standard
+        readiness:
+          type: http
+          path: /
+          preset: standard
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+status:
+  fields:
+    - path: mongodbReady
+      value: "{{ allReplicasReady .children.statefulset }}"
+    - path: connectionSecret
+      value: "{{ .metadata.name }}-creds"
+    - path: connectionString
+      value: "mongodb://{{ .inputs.username }}@{{ .metadata.name }}-mongodb.{{ .metadata.namespace }}.svc.cluster.local:27017/{{ .inputs.database }}"
+    - path: mongoExpressUrl
+      value: "http://{{ .metadata.name }}-mongoexpress-svc.{{ .metadata.namespace }}.svc.cluster.local:8081"

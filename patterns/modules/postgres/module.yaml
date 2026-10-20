@@ -1,0 +1,159 @@
+apiVersion: inrun.dev/v1
+kind: Module
+metadata:
+  name: postgres
+  version: v0.1.0
+  description: >
+    PostgreSQL StatefulSet with persistent storage, headless Service for pod DNS,
+    client Service, and pgAdmin management UI.
+    Postgres password is saved to secret {{ name }}-creds.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - postgres
+    - database
+    - sql
+    - statefulset
+    - storage
+    - ui
+    - headless-service
+
+inputs:
+  - name: image
+    description: PostgreSQL image
+    default: "postgres:latest"
+
+  - name: replicas
+    description: Number of replicas
+    default: "1"
+
+  - name: resourcePreset
+    description: CPU/memory preset (tiny, small, medium, large, burst, steady, compute-heavy, memory-heavy)
+    default: "burst"
+
+  - name: volumeSize
+    description: PVC storage size for the data volume
+    default: "10Gi"
+
+  - name: storageClass
+    description: StorageClass for dynamic PVC provisioning
+    default: "standard"
+
+  - name: database
+    description: Default database name
+    default: "app"
+
+  - name: username
+    description: PostgreSQL superuser name
+    default: "postgres"
+
+  - name: pgAdminImage
+    description: pgAdmin management UI image
+    default: "dpage/pgadmin4:latest"
+
+  - name: enableUI
+    description: Deploy the pgAdmin management UI (true/false)
+    default: "true"
+
+  - name: passwordRotation
+    description: How often to rotate the generated password secret (e.g. 30d, 90d, 365d). Set to "never" to disable rotation.
+    default: "30d"
+
+resources:
+  # Special case
+  # Created just once, not reconciled
+  onCreate:
+    secrets:
+      - name: "{{ .metadata.name }}-creds"
+        once: true
+        rotateAfter: "{{ .inputs.passwordRotation }}"
+        data:
+          password: "{{ randomAlphanumeric 16 }}"
+
+  # The rest added to onReconcile by default
+  statefulSets:
+    - name: "{{ .metadata.name }}-postgres"
+      image: "{{ .inputs.image }}"
+      replicas: "{{ .inputs.replicas }}"
+      serviceName: "{{ .metadata.name }}-postgres-headless"
+      port: 5432
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        startup:
+          type: tcp
+          preset: slow-start
+        liveness:
+          type: tcp
+          preset: standard
+        readiness:
+          type: tcp
+          preset: standard
+      volumeClaimTemplates:
+        - name: data
+          storageClass: "{{ .inputs.storageClass }}"
+          storageSize: "{{ .inputs.volumeSize }}"
+          mountPath: /var/lib/postgresql/data
+      env:
+        - name: POSTGRES_DB
+          value: "{{ .inputs.database }}"
+        - name: POSTGRES_USER
+          value: "{{ .inputs.username }}"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ .metadata.name }}-creds"
+              key: password
+
+  services:
+    - name: "{{ .metadata.name }}-postgres-headless"
+      headless: true
+      port: 5432
+      targetPort: 5432
+
+    - name: "{{ .metadata.name }}-postgres"
+      port: 5432
+      targetPort: 5432
+
+    - name: "{{ .metadata.name }}-pgadmin-svc"
+      port: 80
+      targetPort: 80
+      type: LoadBalancer
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+  deployments:
+    - name: "{{ .metadata.name }}-pgadmin"
+      image: "{{ .inputs.pgAdminImage }}"
+      env:
+        - name: PGADMIN_DEFAULT_EMAIL
+          value: "admin@inrun.local"
+        - name: PGADMIN_DEFAULT_PASSWORD
+          value: "admin"
+      port: 80
+      resources:
+        preset: "{{ .inputs.resourcePreset }}"
+      probes:
+        liveness:
+          type: http
+          path: /misc/ping
+          preset: standard
+        readiness:
+          type: http
+          path: /misc/ping
+          preset: standard
+      when:
+        - field: inputs.enableUI
+          equals: "true"
+
+status:
+  fields:
+    - path: postgresReady
+      value: "{{ allReplicasReady .children.statefulset }}"
+    - path: connectionSecret
+      value: "{{ .metadata.name }}-creds"
+    - path: connectionString
+      value: "postgresql://{{ .inputs.username }}@{{ .metadata.name }}-postgres.{{ .metadata.namespace }}.svc.cluster.local:5432/{{ .inputs.database }}"
+    - path: pgAdminUrl
+      value: "http://{{ .metadata.name }}-pgadmin-svc.{{ .metadata.namespace }}.svc.cluster.local"

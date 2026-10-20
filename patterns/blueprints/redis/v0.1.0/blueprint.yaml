@@ -1,0 +1,48 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: redis
+  version: v0.1.0
+  description: >-
+    A declarative Redis deployment pattern that provisions a single‑instance
+    Redis server using any CR image version. The pattern accepts any valid
+    Redis image tag through spec.version, defaults to 7, and exposes port 6379
+    via a stable Service. Includes an optional Redis Commander management UI.
+    Suitable for caching, session storage, and pub/sub workloads.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - redis
+    - cache
+    - key-value
+    - stateful
+    - persistent-storage
+    - service
+    - single-instance
+    - development
+    - ci
+    - production-ready
+    - storage
+    - blueprint
+
+spec:
+  crds:
+    redis:
+      apiTypes:
+        group: redis.inrun.dev
+        version: v1
+        kind: Redis
+        plural: redises
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/redis:v0.1.0
+              with:
+                image: 'redis:{{ .spec.version | default "7" }}'
+                replicas: '{{ .spec.replicas | default "1" }}'
+                resourcePreset: '{{ .spec.resourcePreset | default "burst" }}'
+                volumeSize: '{{ .spec.storageSize | default "5Gi" }}'
+                storageClass: '{{ .spec.storageClass | default "standard" }}'
+                enableUI: '{{ .spec.enableUI | default "true" }}'

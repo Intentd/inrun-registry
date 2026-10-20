@@ -1,0 +1,11 @@
+apiVersion: kafka.inrun.dev/v1
+kind: Kafka
+metadata:
+  name: my-kafka
+  namespace: default
+spec:
+  version: "latest"
+  replicas: 1
+  storageSize: 20Gi
+  storageClass: standard
+  resourcePreset: burst  # fits a small CI node; the Module default stays compute-heavy

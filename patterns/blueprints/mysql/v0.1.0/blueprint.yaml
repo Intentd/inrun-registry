@@ -1,0 +1,50 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: mysql
+  version: v0.1.0
+  description: >-
+    A declarative MySQL deployment pattern that provisions a single‑instance
+    MySQL server using any CR image version. The pattern accepts any valid
+    MySQL image tag through spec.version, defaults to 8, and exposes port 3306
+    via a stable Service. Includes an optional phpMyAdmin management UI.
+    Suitable for development, CI, and controlled production.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - mysql
+    - database
+    - sql
+    - stateful
+    - persistent-storage
+    - service
+    - single-instance
+    - development
+    - ci
+    - production-ready
+    - storage
+    - blueprint
+
+spec:
+  crds:
+    mysql:
+      apiTypes:
+        group: mysql.inrun.dev
+        version: v1
+        kind: MySQL
+        plural: mysqls
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/mysql:v0.1.0
+              with:
+                image: 'mysql:{{ .spec.version | default "8" }}'
+                replicas: '{{ .spec.replicas | default "1" }}'
+                resourcePreset: '{{ .spec.resourcePreset | default "burst" }}'
+                volumeSize: '{{ .spec.storageSize | default "10Gi" }}'
+                storageClass: '{{ .spec.storageClass | default "standard" }}'
+                database: '{{ .spec.database | default "app" }}'
+                username: '{{ .spec.username | default "mysql" }}'
+                enableUI: '{{ .spec.enableUI | default "true" }}'

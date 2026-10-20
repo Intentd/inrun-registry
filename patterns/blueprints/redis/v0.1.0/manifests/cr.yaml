@@ -1,0 +1,11 @@
+apiVersion: redis.inrun.dev/v1
+kind: Redis
+metadata:
+  name: my-redis
+  namespace: default
+spec:
+  version: "7"
+  storageSize: 5Gi
+  storageClass: standard
+  resourcePreset: burst
+  replicas: 1

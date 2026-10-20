@@ -1,0 +1,50 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: rabbitmq
+  version: v0.1.0
+  description: >-
+    A declarative RabbitMQ deployment pattern that provisions a single‑instance
+    RabbitMQ broker using the management image. The pattern accepts any valid
+    RabbitMQ image tag through spec.version and exposes port 5672 for AMQP
+    traffic via a stable Service. The built‑in management UI runs on port 15672.
+    Suitable for task queues, event‑driven architectures, and microservice messaging.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - rabbitmq
+    - messaging
+    - amqp
+    - stateful
+    - persistent-storage
+    - service
+    - single-instance
+    - development
+    - ci
+    - production-ready
+    - storage
+    - blueprint
+
+spec:
+  crds:
+    rabbitmq:
+      apiTypes:
+        group: rabbitmq.inrun.dev
+        version: v1
+        kind: RabbitMQ
+        plural: rabbitmqs
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/rabbitmq:v0.1.0
+              with:
+                image: 'rabbitmq:{{ .spec.version | default "management" }}'
+                replicas: '{{ .spec.replicas | default "1" }}'
+                resourcePreset: '{{ .spec.resourcePreset | default "small" }}'
+                volumeSize: '{{ .spec.storageSize | default "5Gi" }}'
+                storageClass: '{{ .spec.storageClass | default "standard" }}'
+                username: '{{ .spec.username | default "admin" }}'
+                vhost: '{{ .spec.vhost | default "/" }}'
+                enableUI: '{{ .spec.enableUI | default "true" }}'

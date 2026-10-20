@@ -1,0 +1,27 @@
+apiVersion: inrun.dev/v1
+kind: Simulate
+metadata:
+  name: rabbitmq-sim
+  description: Verify RabbitMQ headless Service, Service, and StatefulSet created in cycle 1
+
+spec:
+  blueprint: ../blueprint.yaml
+  cr: ../manifests/cr.yaml
+  cycles: 5
+
+  expect:
+    steady: true
+    noErrors: true
+    ops:
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-rabbitmq-rabbitmq-headless
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-rabbitmq-rabbitmq
+      - cycle: 1
+        verb: apply
+        resource: statefulsets
+        name: my-rabbitmq-rabbitmq

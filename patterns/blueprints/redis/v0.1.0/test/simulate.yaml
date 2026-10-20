@@ -1,0 +1,27 @@
+apiVersion: inrun.dev/v1
+kind: Simulate
+metadata:
+  name: redis-sim
+  description: Verify Redis headless Service, Service, and StatefulSet created in cycle 1
+
+spec:
+  blueprint: ../blueprint.yaml
+  cr: ../manifests/cr.yaml
+  cycles: 5
+
+  expect:
+    steady: true
+    noErrors: true
+    ops:
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-redis-redis-headless
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-redis-redis
+      - cycle: 1
+        verb: apply
+        resource: statefulsets
+        name: my-redis-redis

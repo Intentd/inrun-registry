@@ -1,0 +1,68 @@
+apiVersion: inrun.dev/v1
+kind: E2E
+metadata:
+  name: mongodb-e2e
+  description: End-to-end test for the mongodb Blueprint
+spec:
+  cluster:
+    name: inrun-e2e-mongodb
+    provider: kind
+    reuse: false
+  blueprint: ../blueprint.yaml
+  crd: ../manifests/crd.yaml
+  cr: ../manifests/cr.yaml
+  expect:
+    - name: "CR created"
+      after: cr-applied
+      timeout: 30s
+      resources:
+        - kind: MongoDB
+          name: my-mongodb
+          namespace: default
+
+    - name: "StatefulSet running with correct replicas"
+      after: cr-applied
+      timeout: 300s
+      resources:
+        - kind: StatefulSet
+          name: my-mongodb-mongodb
+          namespace: default
+          ready: true
+      kubectl:
+        get:
+          - kind: StatefulSet
+            name: my-mongodb-mongodb
+            namespace: default
+            field: .spec.replicas
+            equals: "1"
+          - kind: StatefulSet
+            name: my-mongodb-mongodb
+            namespace: default
+            field: .spec.volumeClaimTemplates[0].spec.resources.requests.storage
+            equals: 10Gi
+
+    - name: "Service exists"
+      after: cr-applied
+      timeout: 60s
+      resources:
+        - kind: Service
+          name: my-mongodb-mongodb
+          namespace: default
+
+    - name: "CR deleted"
+      after: cr-deleted
+      timeout: 60s
+      resources:
+        - kind: MongoDB
+          name: my-mongodb
+          namespace: default
+          count: 0
+
+    - name: "StatefulSet removed"
+      after: cr-deleted
+      timeout: 90s
+      resources:
+        - kind: StatefulSet
+          name: my-mongodb-mongodb
+          namespace: default
+          count: 0

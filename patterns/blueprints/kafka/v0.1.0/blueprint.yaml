@@ -1,0 +1,50 @@
+apiVersion: inrun.dev/v1
+kind: Blueprint
+metadata:
+  name: kafka
+  version: v0.1.0
+  description: >-
+    A declarative Apache Kafka deployment pattern that provisions a single‑broker
+    Kafka cluster in KRaft mode (no Zookeeper dependency) using any CR image version.
+    The pattern accepts any valid Apache Kafka image tag through spec.version and
+    exposes port 9092 via a stable Service. Includes an optional Kafka UI management
+    console. Suitable for event streaming, log aggregation, and real-time data pipelines.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - kafka
+    - messaging
+    - streaming
+    - stateful
+    - persistent-storage
+    - service
+    - single-instance
+    - kraft
+    - distributed
+    - development
+    - ci
+    - production-ready
+    - storage
+    - blueprint
+
+spec:
+  crds:
+    kafka:
+      apiTypes:
+        group: kafka.inrun.dev
+        version: v1
+        kind: Kafka
+        plural: kafkas
+      operatorBox:
+        reconcile:
+          workers: 2
+          resync: 1m
+          imports:
+            - module: oci://ghcr.io/intentd/registry/patterns/modules/kafka:v0.1.0
+              with:
+                image: 'apache/kafka:{{ .spec.version | default "latest" }}'
+                replicas: '{{ .spec.replicas | default "1" }}'
+                resourcePreset: '{{ .spec.resourcePreset | default "compute-heavy" }}'
+                volumeSize: '{{ .spec.storageSize | default "20Gi" }}'
+                storageClass: '{{ .spec.storageClass | default "standard" }}'
+                enableUI: '{{ .spec.enableUI | default "true" }}'

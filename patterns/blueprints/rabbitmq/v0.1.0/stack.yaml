@@ -1,0 +1,18 @@
+apiVersion: inrun.dev/v1
+kind: Stack
+metadata:
+  name: rabbitmq-example
+  description: Example Stack showing how to consume the rabbitmq pattern
+
+imports:
+  registry:
+    - url: ghcr.io/intentd/registry/patterns/blueprints/rabbitmq:v0.1.0
+      oci: true
+
+spec:
+  crds:
+    rabbitmq:
+      operatorBox:
+        reconcile:
+          workers: 4
+          resync: 30s

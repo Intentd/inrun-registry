@@ -1,0 +1,135 @@
+apiVersion: inrun.dev/v1
+kind: Module
+metadata:
+  name: deployment-stack
+  version: v0.1.0
+  description: >
+    Full application deployment stack: ServiceAccount, Role, RoleBinding,
+    Deployment, Service, HPA, PDB, and optional Ingress.
+    All inputs are optional except image, port, name, and namespace.
+    Ingress is only created when the CR data.host field is non-empty.
+  author: intentd
+  license: Apache-2.0
+  tags:
+    - deployment
+    - service
+    - autoscaling
+    - ingress
+    - rbac
+    - full-stack
+    - application
+    - multi-resource
+
+inputs:
+  - name: name
+    required: true
+    description: Resource name prefix. Pass the runtime expression for metadata.name from the Blueprint's with block.
+
+  - name: namespace
+    required: true
+    description: Target namespace. Pass the runtime expression for metadata.namespace from the Blueprint's with block.
+
+  - name: image
+    required: true
+    description: Container image (e.g. ghcr.io/myorg/myapp:latest)
+
+  - name: port
+    required: true
+    description: Container port the application listens on (e.g. 8080)
+
+  - name: replicas
+    default: "2"
+    description: Desired replica count
+
+  - name: maxReplicas
+    default: "10"
+    description: Maximum replicas for HPA scale-out
+
+  - name: resourcePreset
+    default: "burst"
+    description: Resource preset (tiny, small, medium, large, burst, steady, compute-heavy, memory-heavy)
+
+  - name: className
+    default: "nginx"
+    description: Ingress class name (nginx, traefik, kong, etc.)
+
+  - name: host
+    default: ""
+    description: >
+      Public hostname for Ingress (e.g. myapp.example.com).
+      When empty the Ingress resource is present but the when condition
+      prevents it from being created until data.host is set in the CR.
+
+resources:
+  namespaces:
+    - name: '{{ .inputs.namespace }}'
+
+  serviceAccounts:
+    - name: '{{ .inputs.name }}-sa'
+      namespace: '{{ .inputs.namespace }}'
+
+  roles:
+    - name: '{{ .inputs.name }}-role'
+      namespace: '{{ .inputs.namespace }}'
+      rules:
+        - apiGroups: ["apps"]
+          resources: ["deployments"]
+          verbs: ["get", "list", "watch", "update", "patch"]
+          resourceNames:
+            - '{{ .inputs.name }}'
+
+  roleBindings:
+    - name: '{{ .inputs.name }}-rolebinding'
+      namespace: '{{ .inputs.namespace }}'
+      roleRef:
+        name: '{{ .inputs.name }}-role'
+      subjects:
+        - kind: ServiceAccount
+          name: '{{ .inputs.name }}-sa'
+          namespace: '{{ .inputs.namespace }}'
+
+  deployments:
+    - name: '{{ .inputs.name }}'
+      namespace: '{{ .inputs.namespace }}'
+      image: '{{ .inputs.image }}'
+      replicas: '{{ .inputs.replicas }}'
+      port: '{{ .inputs.port }}'
+      serviceAccountName: '{{ .inputs.name }}-sa'
+      resources:
+        preset: '{{ .inputs.resourcePreset }}'
+
+  services:
+    - name: '{{ .inputs.name }}-svc'
+      namespace: '{{ .inputs.namespace }}'
+      port: '{{ .inputs.port }}'
+      targetPort: '{{ .inputs.port }}'
+
+  ingresses:
+    - name: '{{ .inputs.name }}-ingress'
+      namespace: '{{ .inputs.namespace }}'
+      host: '{{ .inputs.host }}'
+      serviceName: '{{ .inputs.name }}-svc'
+      servicePort: '{{ .inputs.port }}'
+      className: '{{ .inputs.className }}'
+      when:
+        - field: '{{ .inputs.host }}'
+          exists: true
+
+  hpa:
+    - name: '{{ .inputs.name }}-hpa'
+      namespace: '{{ .inputs.namespace }}'
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: '{{ .inputs.name }}'
+      minReplicas: '{{ .inputs.replicas }}'
+      maxReplicas: '{{ .inputs.maxReplicas }}'
+      targetCPUUtilizationPercentage: "70"
+
+  pdb:
+    - name: '{{ .inputs.name }}-pdb'
+      namespace: '{{ .inputs.namespace }}'
+      minAvailable: "1"
+      when:
+        - field: data.image
+          exists: true

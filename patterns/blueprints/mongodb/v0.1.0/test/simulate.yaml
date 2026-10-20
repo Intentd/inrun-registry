@@ -1,0 +1,31 @@
+apiVersion: inrun.dev/v1
+kind: Simulate
+metadata:
+  name: mongodb-sim
+  description: Verify MongoDB credentials Secret, headless Service, Service, and StatefulSet created in cycle 1
+
+spec:
+  blueprint: ../blueprint.yaml
+  cr: ../manifests/cr.yaml
+  cycles: 5
+
+  expect:
+    steady: true
+    noErrors: true
+    ops:
+      - cycle: 1
+        verb: create
+        resource: secrets
+        name: my-mongodb-creds
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-mongodb-mongodb-headless
+      - cycle: 1
+        verb: apply
+        resource: services
+        name: my-mongodb-mongodb
+      - cycle: 1
+        verb: apply
+        resource: statefulsets
+        name: my-mongodb-mongodb
